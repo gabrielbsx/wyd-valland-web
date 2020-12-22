@@ -1,0 +1,9 @@
+.w-70 {
+    width: 20rem;
+}
+.message {
+    transition: all 1s ease-in;
+}
+p {
+    color: white;
+}
