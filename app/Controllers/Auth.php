@@ -10,7 +10,16 @@ use App\Models\TicketAnswers;
 use App\Libraries\Mob;
 use App\Models\MercadopagoRequests;
 use App\Models\MercadopagoPincode;
+use App\Models\PicpayRequests;
+use App\Models\Donate;
+use App\Models\DonateBonus;
+use Exception;
 use MercadoPago;
+use Picpay\Payment;
+use Picpay\Buyer;
+use Picpay\Seller;
+use Picpay\Request\PaymentRequest;
+use Picpay\Exception\RequestException;
 
 class Auth extends BaseController
 {
@@ -132,7 +141,7 @@ class Auth extends BaseController
                     $numeric = strlen($read['numeric']) ? $read['numeric'] : 'Senha numérica não definida!';
                     $text = "Usuário: $user\nSenha: $pass\nNumérica: $numeric\n________________________________\n";
                     $sender = \Config\Services::email();
-                    $sender->setFrom('teste@gmail.com', 'Teste');
+                    $sender->setFrom('gabrielturing@gmail.com', 'Gabriel Silva');
                     $sender->setTo(session()->get('login')['email']);
                     $sender->setSubject('Recuperação de conta - Tail of Dark');
                     $sender->setMessage($text);
@@ -174,7 +183,7 @@ class Auth extends BaseController
                                 $text .= "Usuário: $user\nSenha: $pass\nNumérica: $numeric\n________________________________\n";
                             }
                             $sender = \Config\Services::email();
-                            $sender->setFrom('teste@gmail.com', 'Teste');
+                            $sender->setFrom('gabrielturing@gmail.com', 'Gabriel Silva');
                             $sender->setTo($email);
                             $sender->setSubject('Recuperação de conta - Tail of Dark');
                             $sender->setMessage($text);
@@ -254,6 +263,67 @@ class Auth extends BaseController
         return redirect()->to(base_url('site'))->with($this->rettype, $this->data);
     }
 
+    public function createpackage()
+    {
+        if (session()->has('login')) {
+            if (session()->get('login')['access'] == 3) {
+                if ($this->request->getMethod(true) == 'POST') {
+                    if (recaptcha($this->request->getPost('g-recaptcha-response'), $this->data['recaptcha_secret'])) {
+                        $package = new Donate();
+                        $data = $this->request->getPost();
+                        if ($package->save($data)) {
+                            $this->data['success'] = 'Pacotecriado  com sucesso!';
+                        } else $this->data['error'] = implode("<div class=\"grid mt-5\"></div>", $package->errors());
+                    } else $this->data['error'] = 'Recaptcha inválido';
+                } else $this->data['error'] = 'Requisição inválida';
+                return redirect()->to(base_url('admin/donate'))->with($this->rettype, $this->data);
+            }
+        }
+        return redirect()->to(base_url('site'))->with($this->rettype, $this->data);
+    }
+
+    public function editpackage()
+    {
+        if (session()->has('login')) {
+            if (session()->get('login')['access'] == 3) {
+                $ret = 'donate';
+                if ($this->request->getMethod(true) == 'POST') {
+                    if (recaptcha($this->request->getPost('g-recaptcha-response'), $this->data['recaptcha_secret'])) {
+                        $package = new Donate();
+                        $id = $this->request->getPost('id');
+                        if ($id > 0) {
+                            $ret = 'editpackage/' . $id;
+                            $data = $this->request->getPost();
+                            if ($package->update($id, $data)) {
+                                $this->data['success'] = 'Pacote alterado com sucesso!';
+                            } else $this->data['error'] = implode("<div class=\"grid mt-5\"></div>", $package->errors());
+                        } else $this->data['error'] = 'Pacote inválido';
+                    } else $this->data['error'] = 'Recaptcha inválido';
+                } else $this->data['error'] = 'Requisição inválida';
+                return redirect()->to(base_url('admin/' . $ret))->with($this->rettype, $this->data);
+            }
+        }
+        return redirect()->to(base_url('site'))->with($this->rettype, $this->data);
+    }
+
+    public function delpackage($id = null)
+    {
+        if (session()->has('login')) {
+            if (session()->get('login')['access'] == 3) {
+                if (recaptcha($this->request->getPost('g-recaptcha-response'), $this->data['recaptcha_secret'])) {
+                    if ($id > 0) {
+                        $package = new Donate();
+                        if ($package->where('id', $id)->delete()) {
+                            $this->data['success'] = 'Pacote deletado com sucesso!';
+                        } else $this->data['error'] = 'Não foi possível deletar o pacote!';
+                    } else $this->data['error'] = 'Pacote inválida!';
+                } else $this->data['error'] = 'Recaptcha inválido!';
+                return redirect()->to(base_url('admin/donate'))->with($this->rettype, $this->data);
+            }
+        }
+        return redirect()->to(base_url('site'))->with($this->rettype, $this->data);
+    }
+
     public function createnews()
     {
         if (session()->has('login')) {
@@ -268,7 +338,7 @@ class Auth extends BaseController
                         } else $this->data['error'] = implode("<div class=\"grid mt-5\"></div>", $news->errors());
                     } else $this->data['error'] = 'Recaptcha inválido';
                 } else $this->data['error'] = 'Requisição inválida';
-                return redirect()->to(base_url('dashboard/createnews'))->with($this->rettype, $this->data);
+                return redirect()->to(base_url('admin/createnews'))->with($this->rettype, $this->data);
             }
         }
         return redirect()->to(base_url('site'))->with($this->rettype, $this->data);
@@ -293,7 +363,7 @@ class Auth extends BaseController
                         } else $this->data['error'] = 'Notícia inválida';
                     } else $this->data['error'] = 'Recaptcha inválido';
                 } else $this->data['error'] = 'Requisição inválida';
-                return redirect()->to(base_url('dashboard/' . $ret))->with($this->rettype, $this->data);
+                return redirect()->to(base_url('admin/' . $ret))->with($this->rettype, $this->data);
             }
         }
         return redirect()->to(base_url('site'))->with($this->rettype, $this->data);
@@ -311,7 +381,7 @@ class Auth extends BaseController
                         } else $this->data['error'] = 'Não foi possível deletar a notícia!';
                     } else $this->data['error'] = 'Notícia inválida!';
                 } else $this->data['error'] = 'Recaptcha inválido!';
-                return redirect()->to(base_url('dashboard/news'))->with($this->rettype, $this->data);
+                return redirect()->to(base_url('admin/news'))->with($this->rettype, $this->data);
             }
         }
         return redirect()->to(base_url('site'))->with($this->rettype, $this->data);
@@ -395,13 +465,16 @@ class Auth extends BaseController
         return redirect()->to(base_url('site'))->with($this->rettype, $this->data);
     }
 
-    public function mercadopago()
+    public function purchasemp($id = null)
     {
         if (session()->has('login')) {
-            if ($this->request->getMethod(true) == 'POST') {
-                if (recaptcha($this->request->getPost('g-recaptcha-response'), $this->data['recaptcha_secret'])) {
+            if ($id > 0) {
+                $package = new Donate();
+                $packet = $package->where(['id' => $id])->first();
+                if ($packet) {
+                    srand(5);
+                    $index = (string) (time() . rand());
                     $mercadopago = new MercadopagoRequests();
-                    $amount = intval($this->request->getPost('value'));
                     $mp = (new Configuration())->select(['mercadopago_key', 'mercadopago_token', 'title'])->first();
                     #MercadoPago\SDK::setClientId($mp['mercadopago_key']);
                     #MercadoPago\SDK::setClientSecret($mp['mercadopago_token']);
@@ -412,46 +485,137 @@ class Auth extends BaseController
                     srand(5);
                     $id = (string) (time() . rand());
                     $item->id = $id;
-                    $item->title = $mp['title'] . ' - ' . $amount . ' donate';
+                    $item->title = $mp['title'] . ' - ' . $packet['value'] . ' donate';
                     $item->quantity = 1;
-                    $item->unit_price = (int) $amount;
+                    $item->unit_price = (int) $packet['value'];
                     $preference->items = array($item);
                     $preference->external_reference = $id;
                     $preference->notification_url = base_url('/donate/mercadopago');
                     $preference->back_urls = [
-                        'success' => base_url('dashboard/mercadopago?back=success'),
-                        'pending' => base_url('dashboard/mercadopago?back=pending'),
-                        'failure' => base_url('dashboard/mercadopago?back=failure'),
+                        'success' => base_url('dashboard/donation?back=success'),
+                        'pending' => base_url('dashboard/donation?back=pending'),
+                        'failure' => base_url('dashboard/donation?back=failure'),
                     ];
                     $preference->save();
                     $row = [
                         'referenceId' => $id,
                         'referenceIdBox' => $preference->id,
-                        'value' => $amount,
+                        'value' => $packet['value'],
                         'status' => 0,
                         'id_user' => session()->get('login')['id'],
                         'url_payment' => $preference->init_point,
                     ];
                     if ($mercadopago->save($row)) {
                         $this->data['paymentUrl'] = $preference->init_point;
-                        $this->data['success'] = 'Fatura gerada com sucesso!';
-                    } else $this->data['error'] = 'Não foi possível gerar uma fatura!';
-                } else $this->data['error'] = 'Recaptcha inválido!';
-            } else $this->data['error'] = 'Requisição inválida!';
-            return redirect()->to(base_url('dashboard/mercadopago'))->with($this->rettype, $this->data);
-        } else $this->data['error'] = 'Você precisa estar logado para doar!';
+                        $this->data['success'] = 'Doação gerada com sucesso!';
+                    } else $this->data['error'] = 'Não foi possível gerar uma doação!';
+                } else $this->data['error'] = 'Pacote inexistente!';
+            } else $this->data['error'] = 'Pacote inexistente!';
+            return redirect()->to(base_url('dashboard/donation'))->with($this->rettype, $this->data);
+        }
         return redirect()->to(base_url('site'))->with($this->rettype, $this->data);
     }
 
-    public function picpay()
+    public function purchasepic($id = null)
     {
         if (session()->has('login')) {
-            if ($this->request->getMethod(true) == 'POST') {
-                if (recaptcha($this->request->getPost('g-recaptcha-response'), $this->data['recaptcha_secret'])) {
-                } else $this->data['error'] = 'Recaptcha inválido!';
+            if ($id > 0) {
+                $package = new Donate();
+                $packet = $package->where(['id' => $id])->first();
+                if ($packet) {
+                    $config = (new Configuration())->select(['picpay_token', 'picpay_seller'])->first();
+                    srand(5);
+                    $index = (string) (time() . rand());
+                    $seller = new Seller($config['picpay_token'], $config['picpay_seller']);
+                    $buyer = new Buyer('Gabriel', 'Silva', '461.905.698-70', 'gabrielturing@gmail.com', '+55 11 96354-3075');
+                    $payment = new Payment($index, base_url('auth/picpay'), $packet['value'], $buyer, base_url('dashboard/donation'));
+                    try {
+                        $paymentRequest = new PaymentRequest($seller, $payment);
+                        $paymentResponse = $paymentRequest->execute();
+                        $donate = new PicpayRequests();
+                        $donation = [
+                            'referenceId' => $index,
+                            'email' => session()->get('login')['email'],
+                            'value' => $packet['value'],
+                            'status' => 0,
+                            'id_user' => session()->get('login')['id'],
+                            'url_payment' => $paymentResponse->paymentUrl
+                        ];
+                        if ($donate->save($donation)) {
+                            $this->data['success'] = 'Doação gerada com sucesso!';
+                        }
+                    } catch (RequestException $e) {
+                        $this->data['error'] = 'Não foi possível gerar a doação!';
+                        $errorMessage = $e->getMessage();
+                        $statusCode = $e->getCode();
+                        $errors = $e->getErrors();
+                    }
+                } else $this->data['error'] = 'Pacote inexistente!';
+            } else $this->data['error'] = 'Pacote inexistente!';
+            return redirect()->to(base_url('dashboard/donation'))->with($this->rettype, $this->data);
+        }
+        return redirect()->to(base_url('site'))->with($this->rettype, $this->data);
+    }
+
+    public function additem()
+    {
+        if (session()->has('login')) {
+            if (session()->get('login')['access'] == 3) {
+                if ($this->request->getMethod(true) == 'POST') {
+                    if (recaptcha($this->request->getPost('g-recaptcha-response'), $this->data['recaptcha_secret'])) {
+                        $bonus = new DonateBonus();
+                        if ((new Donate())->where(['id' => $this->request->getPost('id_donate')])->first()) {
+                            if ($bonus->save(array_filter($this->request->getPost()))) {
+                                $this->data['success'] = 'Item adicionado com sucesso ao pacote!';
+                            } else $this->data['error'] = implode("<div class=\"grid mt-5\"></div>", $bonus->errors());
+                        } else $this->data['error'] = 'Pacote inexistente!';
+                    } else $this->data['error'] = 'Recaptcha inválido!';
+                } else $this->data['error'] = 'Requisição inválida!';
+                return redirect()->to(base_url('admin/donate'))->with($this->rettype, $this->data);
             }
-            return redirect()->to(base_url('dashboard/picpay'))->with($this->rettype, $this->data);
-        } else $this->data['error'] = 'Você precisa estar logado para doar!';
+        }
+        return redirect()->to(base_url('site'))->with($this->rettype, $this->data);
+    }
+
+    public function edititem()
+    {
+        if (session()->has('login')) {
+            if (session()->get('login')['access'] == 3) {
+                $ret = 'donate';
+                if ($this->request->getMethod(true) == 'POST') {
+                    if (recaptcha($this->request->getPost('g-recaptcha-response'), $this->data['recaptcha_secret'])) {
+                        $bonus = new DonateBonus();
+                        $id = $this->request->getPost('id');
+                        if ($id > 0) {
+                            $ret = 'edititem/' . $id;
+                            $data = $this->request->getPost();
+                            if ($bonus->update($id, $data)) {
+                                $this->data['success'] = 'Item alterado com sucesso do pacote!';
+                            } else $this->data['error'] = implode("<div class=\"grid mt-5\"></div>", $bonus->errors());
+                        } else $this->data['error'] = 'Item inválido';
+                    } else $this->data['error'] = 'Recaptcha inválido';
+                } else $this->data['error'] = 'Requisição inválida';
+                return redirect()->to(base_url('admin/' . $ret))->with($this->rettype, $this->data);
+            }
+        }
+        return redirect()->to(base_url('site'))->with($this->rettype, $this->data);
+    }
+
+    public function delitem($id = null)
+    {
+        if (session()->has('login')) {
+            if (session()->get('login')['access'] == 3) {
+                if (recaptcha($this->request->getPost('g-recaptcha-response'), $this->data['recaptcha_secret'])) {
+                    if ($id > 0) {
+                        $bonus = new DonateBonus();
+                        if ($bonus->where('id', $id)->delete()) {
+                            $this->data['success'] = 'Item deletado com sucesso do pacote!';
+                        } else $this->data['error'] = 'Não foi possível deletar o item do pacote!';
+                    } else $this->data['error'] = 'Item inválida!';
+                } else $this->data['error'] = 'Recaptcha inválido!';
+                return redirect()->to(base_url('admin/donate'))->with($this->rettype, $this->data);
+            }
+        }
         return redirect()->to(base_url('site'))->with($this->rettype, $this->data);
     }
 
@@ -475,7 +639,7 @@ class Auth extends BaseController
                         }
                     } else $this->data['error'] = 'Recaptcha inválido!';
                 } else $this->data['error'] = 'Requisição inválida!';
-                return redirect()->to(base_url('dashboard/config'))->with($this->rettype, $this->data);
+                return redirect()->to(base_url('admin/config'))->with($this->rettype, $this->data);
             }
         }
         return redirect()->to(base_url('site'))->with($this->rettype, $this->data);
