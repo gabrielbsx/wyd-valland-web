@@ -1,5 +1,4 @@
 <?php
-
 namespace App\Controllers;
 
 /**
@@ -43,9 +42,9 @@ class BaseController extends Controller
 	{
 		$config = new Configuration();
 		$recaptcha = $config->select()->first();
-		$site = $recaptcha['recaptcha_site'] ?? false;
+		$recaptcha = $recaptcha['recaptcha_site'] ?? false;
 		$secret = $recaptcha['recaptcha_secret'] ?? null;
-		$this->data['recaptcha'] = $site;
+		$this->data['recaptcha'] = $recaptcha;
 		$this->data['recaptcha_secret'] = $secret;
 	}
 
@@ -73,4 +72,5 @@ class BaseController extends Controller
 		// E.g.:
 		// $this->session = \Config\Services::session();
 	}
+
 }
