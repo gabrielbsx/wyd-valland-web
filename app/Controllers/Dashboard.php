@@ -9,6 +9,10 @@ use App\Models\News;
 use App\Models\Tickets;
 use App\Models\MercadopagoRequests;
 use App\Models\PicpayRequests;
+use App\Models\Donate;
+use App\Models\DonateBonus;
+use App\Libraries\Mob;
+use App\Libraries\Mob7662;
 
 class Dashboard extends BaseController
 {
@@ -57,30 +61,6 @@ class Dashboard extends BaseController
         return redirect()->to(base_url('site'))->with($this->rettype, $this->data);
     }
 
-    public function createnews()
-    {
-        if (session()->has('login')) {
-            if (session()->get('login')['access'] == 3) {
-                return view('dashboard/pages/createnews', $this->data);
-            }
-        }
-        return redirect()->to(base_url('site'))->with($this->rettype, $this->data);
-    }
-
-    public function editnews($id = null)
-    {
-        if (session()->has('login')) {
-            if (session()->get('login')['access'] == 3) {
-                if ($id > 0) {
-                    $news = new News();
-                    $this->data['news'] = $news->where('id', $id)->first();
-                }
-                return view('dashboard/pages/editnews', $this->data);
-            }
-        }
-        return redirect()->to(base_url('site'))->with($this->rettype, $this->data);
-    }
-
     public function answerticket($id = null)
     {
         if (session()->has('login')) {
@@ -120,50 +100,59 @@ class Dashboard extends BaseController
         return redirect()->to(base_url('site'))->with($this->rettype, $this->data);
     }
 
-    public function news()
+    public function donation()
     {
         if (session()->has('login')) {
-            if (session()->get('login')['access'] == 3) {
-                $news = new News();
-                $this->data['paginate_news'] = $news->orderBy('id', 'DESC')->paginate(5, 'news');
-                $this->data['pager_news'] = $news->pager;
-                return view('dashboard/pages/news', $this->data);
+            $donate = new Users();
+            $package = new Donate();
+            //$this->data['donate_paginate'] = $donate->join('picpay_requests', 'picpay_requests.id_user = mercadopago_requests.id_user')->where(['mercadopago_requests.id_user' => session()->get('login')['id'], 'picpay_requests.id_user' => session()->get('login')['id']])->orderBy('mercadopago_requests.id', 'DESC')->paginate(3, 'donate');
+            /*$this->data['donate_paginate'] = $donate->select([
+                'picpay_requests.value as picpay_value',
+                'picpay_requests.status as picpay_status',
+                'picpay_requests.referenceId as picpay_referenceId',
+                'picpay_requests.url_payment as picpay_paymentUrl',
+                'picpay_requests.created_at as picpay_createdAt',
+                'picpay_requests.updated_at as picpay_updatedAt',
+                'mercadopago_requests.value as mercadopago_value',
+                'mercadopago_requests.status as mercadopago_status',
+                'mercadopago_requests.referenceId as mercadopago_referenceId',
+                'mercadopago_requests.url_payment as mercadopago_paymentUrl',
+                'mercadopago_requests.created_at as mercadopago_createdAt',
+                'mercadopago_requests.updated_at as mercadopago_updatedAt'
+                
+            ])->join('picpay_requests', 'picpay_requests.id_user = users.id')->join('mercadopago_requests', 'mercadopago_requests.id_user = users.id')->where(['users.id' => session()->get('login')['id']])->orderBy('picpay_requests.id DESC, mercadopago_requests.id DESC')->paginate(3, 'donate');
+            */
+            $pic = $donate->select([
+                'picpay_requests.value as value',
+                'picpay_requests.status as status',
+                'picpay_requests.referenceId as referenceId',
+                'picpay_requests.url_payment as paymentUrl',
+                'picpay_requests.created_at as createdAt',
+                'picpay_requests.updated_at as updatedAt'
+            ])->join('picpay_requests', 'picpay_requests.id_user = users.id')->where(['users.id' => session()->get('login')['id']])->orderBy('picpay_requests.id DESC')->paginate(3, 'donate');
+            $mp = $donate->select([
+                'mercadopago_requests.value as value',
+                'mercadopago_requests.status as status',
+                'mercadopago_requests.referenceId as referenceId',
+                'mercadopago_requests.url_payment as paymentUrl',
+                'mercadopago_requests.created_at as createdAt',
+                'mercadopago_requests.updated_at as updatedAt'  
+            ])->join('mercadopago_requests', 'mercadopago_requests.id_user = users.id')->where(['users.id' => session()->get('login')['id']])->orderBy('mercadopago_requests.id DESC')->paginate(3, 'donate');
+            $this->data['donate_paginate'] = array_merge($pic, $mp);
+            $this->data['donate_pager'] = $donate->pager;
+            $this->data['package_paginate'] = $package->orderBy('id', 'ASC')->paginate(10, 'package');
+            $bonus = (new DonateBonus())->get()->getResult('array');
+            foreach ($this->data['package_paginate'] as $key => $value) {
+                $this->data['package_paginate'][$key]['donate_bonus'] = [];
+                foreach ($bonus as $key2 => $value2) {
+                    if ($value['id'] == $value2['id_donate']) {
+                        $this->data['package_paginate'][$key]['donate_bonus'][$key2] = $value2;
+                    }
+                }
             }
-        }
-        return redirect()->to(base_url('site'))->with($this->rettype, $this->data);
-    }
-
-    public function mercadopago()
-    {
-        if (session()->has('login')) {
-            $mp = new MercadopagoRequests();
-            $this->data['mp_paginate'] = $mp->where(['status' => 0, 'id_user' => session()->get('login')['id']])->orderBy('id', 'DESC')->paginate(3, 'mercadopago');
-            $this->data['mp_pager'] = $mp->pager;
-            return view('dashboard/pages/mercadopago', $this->data);
-        } else $this->data['error'] = 'Você precisa estar logado para doar pelo mercado pago!';
-        return redirect()->to(base_url('site'))->with($this->rettype, $this->data);
-    }
-
-    public function picpay()
-    {
-        if (session()->has('login')) {
-            $picpay = new PicpayRequests();
-            $this->data['paginate_picpay'] = $picpay->where(['status' => 0, 'id_user' => session()->get('login')['id']])->orderBy('id', 'DESC')->paginate(3, 'picpay');
-            $this->data['pager_picpay'] = $picpay->pager;
-            return view('dashboard/pages/picpay', $this->data);
-        } else $this->data['error'] = 'Você precisa estar logado para doar pelo picpay!';
-        return redirect()->to(base_url('site'))->with($this->rettype, $this->data);
-    }
-
-    public function config()
-    {
-        if (session()->has('login')) {
-            if (session()->get('login')['access'] == 3) {
-                $config = new Configuration();
-                $this->data['configuration'] = $config->first();
-                return view('dashboard/pages/configuration', $this->data);
-            }
-        }
+            $this->data['package_pager'] = $package->pager;
+            return view('dashboard/pages/donation', $this->data);
+        } else $this->data['error'] = 'Você precisa estar logado para doar!';
         return redirect()->to(base_url('site'))->with($this->rettype, $this->data);
     }
 
